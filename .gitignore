@@ -6,3 +6,6 @@ dist/
 !.env.example
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

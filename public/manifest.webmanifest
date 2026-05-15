@@ -1,0 +1,19 @@
+{
+  "name": "PocketTone",
+  "short_name": "PocketTone",
+  "description": "A tactile tone generator for pure sine tones and binaural beat sessions.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#10201d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
