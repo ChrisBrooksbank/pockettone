@@ -50,6 +50,7 @@ button {
 .safety-panel,
 .status-line,
 .guidance,
+.selection-cue,
 .segment-label,
 .range-control span {
   display: flex;
@@ -198,6 +199,32 @@ h2 {
   display: flex;
   gap: 8px;
   margin-top: 18px;
+}
+
+.selection-cue {
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid rgba(211, 111, 68, 0.32);
+  border-radius: 8px;
+  background: #fff8ed;
+}
+
+.selection-cue span {
+  color: #7a4c36;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.selection-cue b {
+  color: #10201d;
+}
+
+.selection-cue small {
+  color: #5e6b66;
+  line-height: 1.35;
 }
 
 .mode-tabs,

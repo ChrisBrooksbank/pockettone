@@ -76,6 +76,7 @@ export default function App() {
     }));
 
   const activePresets = presets.filter((preset) => preset.intent === settings.selectedNeed);
+  const selectedNeed = needs.find((need) => need.id === settings.selectedNeed) ?? needs[0];
 
   useEffect(() => {
     if (!engineRef.current) {
@@ -182,6 +183,7 @@ export default function App() {
               key={need.id}
               onClick={() => {
                 patchSettings({ selectedNeed: need.id });
+                setStatus(`Showing ${need.label.toLowerCase()} recommendations. Pick a card below to load a sound.`);
                 haptic(8);
               }}
               type="button"
@@ -208,6 +210,12 @@ export default function App() {
           >
             {isPlaying ? <CircleStop size={34} /> : <Play size={36} fill="currentColor" />}
           </button>
+        </div>
+
+        <div className="selection-cue" aria-live="polite">
+          <span>Current need</span>
+          <b>{selectedNeed.label}</b>
+          <small>{selectedNeed.prompt}</small>
         </div>
 
         <div className="mode-tabs" aria-label="Tone mode">
@@ -382,8 +390,8 @@ export default function App() {
       <section className="recommendation-section" aria-labelledby="recommendations-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Recommended</p>
-            <h2 id="recommendations-title">Start here</h2>
+            <p className="eyebrow">Recommended for {selectedNeed.label}</p>
+            <h2 id="recommendations-title">Pick a starting sound</h2>
           </div>
           <Moon size={22} />
         </div>
@@ -408,7 +416,7 @@ export default function App() {
         <div className="section-heading">
           <div>
             <p className="eyebrow">All {needLabel(settings.selectedNeed)} presets</p>
-            <h2 id="presets-title">Fine tune the choice</h2>
+            <h2 id="presets-title">More choices for {selectedNeed.label.toLowerCase()}</h2>
           </div>
         </div>
         <div className="preset-grid">
