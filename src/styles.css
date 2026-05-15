@@ -455,6 +455,27 @@ input[type="range"] {
   font-weight: 800;
 }
 
+.install-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid rgba(16, 32, 29, 0.13);
+  border-radius: 8px;
+  color: #fff9ed;
+  background: #10201d;
+  font-weight: 850;
+}
+
+.install-button:disabled {
+  cursor: default;
+  color: #52635e;
+  background: #eef0eb;
+}
+
 .haptic-toggle input {
   width: 20px;
   height: 20px;

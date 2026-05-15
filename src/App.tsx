@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bluetooth,
   CircleStop,
+  Download,
   Headphones,
   Info,
   Moon,
@@ -39,11 +40,18 @@ const timers = [5, 10, 20, 30, 45, 60];
 const fades: SessionSettings["fadeSeconds"][] = [0, 3, 10, 30];
 const noiseColors: NoiseColor[] = ["brown", "pink", "white", "blue", "violet"];
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 export default function App() {
   const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings);
   const [isPlaying, setIsPlaying] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [status, setStatus] = useState("Choose what you need, then press play.");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
   const engineRef = useRef<ToneEngine | null>(null);
   const haptic = useHaptics(settings.hapticsEnabled);
 
@@ -83,6 +91,27 @@ export default function App() {
       engineRef.current = new ToneEngine(settings);
     }
   }, [settings]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+      setStatus("PocketTone installed.");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isPlaying || !engineRef.current) {
@@ -174,6 +203,20 @@ export default function App() {
     patchSettings({ selectedNeed: needId });
     setStatus(`Showing ${need?.label.toLowerCase() ?? "new"} recommendations. Pick a card below to load a sound.`);
     haptic(8);
+  }
+
+  async function installApp() {
+    if (!installPrompt) {
+      setStatus("Use your browser menu to install PocketTone. On iPhone, tap Share, then Add to Home Screen.");
+      haptic(8);
+      return;
+    }
+
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setStatus(choice.outcome === "accepted" ? "PocketTone install started." : "Install dismissed.");
+    haptic(choice.outcome === "accepted" ? [12, 35, 12] : 8);
   }
 
   const outputIcon = getOutputIcon(settings.outputMode);
@@ -450,6 +493,10 @@ export default function App() {
           Start quietly, especially with earbuds. PocketTone is for listening rituals, relaxation, focus, and audio checks;
           it does not diagnose, treat, or guarantee health outcomes.
         </p>
+        <button className="install-button" onClick={installApp} type="button" disabled={isInstalled}>
+          <Download size={18} />
+          {isInstalled ? "Installed" : installPrompt ? "Install app" : "Install help"}
+        </button>
         <label className="haptic-toggle">
           <input
             type="checkbox"
