@@ -38,7 +38,14 @@ Use a static Vite app deployed on Netlify.
 ## Differentiated user experience
 
 1. Start screen is the working instrument, not a landing page.
-2. Presets are labelled by intent, not just numbers:
+2. A need-first picker helps people choose without knowing frequency lore:
+   - Sleep: quiet low-volume options, long fade-out, 20-60 minute timers.
+   - Settle: calming pure tones and slow binaural beat options for decompressing.
+   - Meditate: steady tones with longer session timers and minimal UI motion.
+   - Focus: gentle beta/gamma-adjacent binaural options and clean reference tones.
+   - Test audio: practical reference tones for checking speakers or earbuds.
+3. Recommendations explain the tradeoff in plain language, e.g. `Try 432 Hz pure tone if you want a soft steady sound` or `Try a 6 Hz binaural beat with headphones if you want a slower, pulsing stereo feel`.
+4. Presets are labelled by intent, not just numbers:
    - `432 Hz - Calm`
    - `528 Hz - Unwind`
    - `396 Hz - Release`
@@ -47,28 +54,28 @@ Use a static Vite app deployed on Netlify.
    - `40 Hz - Focus`
    - `440 Hz - Reference`
    - `1 kHz - Test Tone`
-3. Custom frequency accepts decimals, clamps to a safe audible range, and explains when a low frequency may be felt more than heard.
-4. Large play/stop control with tactile haptic response.
-5. Sleep-friendly timer: 5, 10, 20, 30, 45, 60 minutes, plus custom.
-6. Smooth fade-in/fade-out options: off, 3s, 10s, 30s.
-7. Mode switch keeps the app honest and uncluttered:
+5. Custom frequency remains available for people who know what they want, accepts decimals, clamps to a safe audible range, and explains when a low frequency may be felt more than heard.
+6. Large play/stop control with tactile haptic response.
+7. Sleep-friendly timer: 5, 10, 20, 30, 45, 60 minutes, plus custom.
+8. Smooth fade-in/fade-out options: off, 3s, 10s, 30s.
+9. Mode switch keeps the app honest and uncluttered:
    - Pure Tone: default, works through earbuds, speakers, or phone speaker.
    - Binaural Beat: optional, requires earbuds/headphones for the intended effect.
    - Isochronic Pulse: marked as planned/later, speaker-friendly but more noticeable.
-8. Output mode guidance:
+10. Output mode guidance:
    - Earbuds: best isolation, use lower volume.
    - External speaker: ambient room tone.
    - Phone speaker: convenient, limited bass response.
-9. Offline-first and private: no login, no analytics by default, no network after install except app updates.
-10. Accessibility: full keyboard support, large touch targets, reduced-motion support, clear contrast, ARIA status for playback.
-11. Responsible claims: relaxation/ritual language, not medical treatment language.
+11. Offline-first and private: no login, no analytics by default, no network after install except app updates.
+12. Accessibility: full keyboard support, large touch targets, reduced-motion support, clear contrast, ARIA status for playback.
+13. Responsible claims: relaxation/ritual language, not medical treatment language. The app can say `commonly used for` or `try this for`, but should avoid claiming that a specific frequency causes a specific health outcome.
 
 ## MVP scope
 
 - Installable PWA with manifest icons, theme color, service worker, and offline shell.
 - Pure tone mode with one sine oscillator, frequency, volume, and timer controls.
 - Binaural beat mode with carrier frequency, beat frequency, volume, timer, and headphone guidance.
-- Labelled preset grid plus custom frequency input.
+- Need-first discovery flow, labelled recommendation cards, preset grid, and custom frequency input.
 - Real-time frequency and beat adjustment while playing.
 - Fade-in/fade-out to avoid pops.
 - Haptic feedback where available.
@@ -101,6 +108,8 @@ src/
   components/
     Player.tsx
     ModeTabs.tsx
+    NeedPicker.tsx
+    RecommendationCards.tsx
     PresetGrid.tsx
     FrequencyInput.tsx
     BeatInput.tsx
@@ -108,6 +117,8 @@ src/
     OutputMode.tsx
     SafetyPanel.tsx
   data/
+    needs.ts
+    recommendations.ts
     presets.ts
   hooks/
     usePersistentState.ts
@@ -142,7 +153,20 @@ type Preset = {
   note: string;
 };
 
+type UserNeed = "sleep" | "settle" | "meditation" | "focus" | "test";
+
+type Recommendation = {
+  id: string;
+  need: UserNeed;
+  presetId: string;
+  title: string;
+  rationale: string;
+  caution?: string;
+  defaultTimerMinutes?: number;
+};
+
 type SessionSettings = {
+  selectedNeed: UserNeed | null;
   mode: "pure" | "binaural" | "isochronic";
   frequency: number;
   beatFrequency: number;
@@ -178,8 +202,9 @@ type SessionSettings = {
 
 ## Testing checklist
 
-- Unit-test frequency validation, beat-frequency validation, timer behavior, preset data, and persistence.
+- Unit-test frequency validation, beat-frequency validation, need-to-recommendation mapping, timer behavior, preset data, and persistence.
 - Browser-test play/stop, frequency changes, and binaural channel routing with a mocked or integration-tested Web Audio layer.
+- UX-test that a first-time user can start from a need such as `sleep` or `focus` without understanding hertz values.
 - PWA checks with Lighthouse: installable, offline, manifest, service worker.
 - Mobile checks on iOS Safari and Android Chrome:
   - audio starts only after gesture,
@@ -197,9 +222,10 @@ type SessionSettings = {
 
 1. Project setup: Vite, TypeScript, linting, Netlify config, PWA baseline.
 2. Audio engine: pure tone and binaural oscillators, gain ramps, live frequency changes, safe teardown.
-3. Core UI: player, mode tabs, presets, custom frequency, beat frequency, volume, timer, output mode.
-4. Mobile polish: haptics, touch ergonomics, install flow, offline behavior.
-5. QA and deploy: Lighthouse, device testing, Netlify preview, production deploy.
+3. Discovery UI: need picker, recommendation cards, plain-language explanations, and non-medical caveats.
+4. Core UI: player, mode tabs, presets, custom frequency, beat frequency, volume, timer, output mode.
+5. Mobile polish: haptics, touch ergonomics, install flow, offline behavior.
+6. QA and deploy: Lighthouse, device testing, Netlify preview, production deploy.
 
 ## Open product decisions
 
