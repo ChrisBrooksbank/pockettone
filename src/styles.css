@@ -111,14 +111,6 @@ h2 {
   padding: 16px 0 0;
 }
 
-.need-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.need-tile,
 .recommendation-card,
 .preset-card,
 .player-surface,
@@ -127,7 +119,6 @@ h2 {
   box-shadow: 0 16px 40px rgba(16, 32, 29, 0.08);
 }
 
-.need-tile,
 .recommendation-card,
 .preset-card {
   display: flex;
@@ -142,24 +133,55 @@ h2 {
   border-radius: 8px;
 }
 
-.need-tile span,
 .recommendation-card span,
 .preset-card span {
   font-weight: 800;
 }
 
-.need-tile small,
 .recommendation-card small,
 .preset-card small {
   color: #5e6b66;
   line-height: 1.35;
 }
 
-.need-tile.active,
 .recommendation-card:hover,
 .preset-card:hover {
   border-color: rgba(211, 111, 68, 0.65);
   background: #fff8ed;
+}
+
+.intent-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.intent-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(16, 32, 29, 0.13);
+  border-radius: 8px;
+  color: #26342f;
+  background: rgba(255, 255, 255, 0.62);
+  font-weight: 850;
+}
+
+.intent-chip.active {
+  color: #fff9ed;
+  border-color: #10201d;
+  background: #10201d;
+}
+
+.intent-summary {
+  max-width: 680px;
+  margin: 10px 0 0;
+  color: #56645f;
+  line-height: 1.42;
+}
+
+.intent-summary b {
+  color: #10201d;
 }
 
 .player-surface {
@@ -440,7 +462,6 @@ input[type="range"] {
 }
 
 @media (max-width: 860px) {
-  .need-grid,
   .control-grid,
   .preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -472,7 +493,6 @@ input[type="range"] {
     font-size: 2.4rem;
   }
 
-  .need-grid,
   .recommendation-grid,
   .preset-grid,
   .control-grid,

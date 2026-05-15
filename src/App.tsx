@@ -161,6 +161,21 @@ export default function App() {
     haptic(10);
   }
 
+  function applyNeed(needId: UserNeed) {
+    const firstRecommendation = recommendations.find((recommendation) => recommendation.need === needId);
+    const preset = firstRecommendation ? presets.find((item) => item.id === firstRecommendation.presetId) : null;
+
+    if (preset) {
+      applyPreset(preset, firstRecommendation?.defaultTimerMinutes ?? settings.timerMinutes);
+      return;
+    }
+
+    const need = needs.find((item) => item.id === needId);
+    patchSettings({ selectedNeed: needId });
+    setStatus(`Showing ${need?.label.toLowerCase() ?? "new"} recommendations. Pick a card below to load a sound.`);
+    haptic(8);
+  }
+
   const outputIcon = getOutputIcon(settings.outputMode);
 
   return (
@@ -176,23 +191,23 @@ export default function App() {
           </div>
         </div>
 
-        <div className="need-grid" aria-label="Choose a need">
+        <div className="intent-selector" aria-label="Choose a need">
           {needs.map((need) => (
             <button
-              className={need.id === settings.selectedNeed ? "need-tile active" : "need-tile"}
+              className={need.id === settings.selectedNeed ? "intent-chip active" : "intent-chip"}
               key={need.id}
               onClick={() => {
-                patchSettings({ selectedNeed: need.id });
-                setStatus(`Showing ${need.label.toLowerCase()} recommendations. Pick a card below to load a sound.`);
-                haptic(8);
+                applyNeed(need.id);
               }}
               type="button"
             >
-              <span>{need.label}</span>
-              <small>{need.prompt}</small>
+              {need.label}
             </button>
           ))}
         </div>
+        <p className="intent-summary">
+          <b>{selectedNeed.label}:</b> {selectedNeed.prompt}
+        </p>
       </section>
 
       <section className="player-surface" aria-label="Tone player">
