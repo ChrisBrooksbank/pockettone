@@ -28,6 +28,7 @@ Use a static Vite app deployed on Netlify.
 - Framework: React + TypeScript + Vite, or vanilla TypeScript if the UI remains small.
 - Audio: Web Audio API with `AudioContext`, `OscillatorNode`, `GainNode`, `ChannelMergerNode`, and `StereoPannerNode` where supported.
 - Core tone: single real-time `sine` oscillator by default. MDN documents `OscillatorNode.frequency` in hertz and built-in waveform types including `sine`.
+- Noise mode: generated white, pink, brown, blue, and violet noise colors for sleep, focus, masking, and audio checks.
 - Binaural beats: optional headphone-only mode using two sine oscillators, one routed left and one routed right, with a small beat-frequency offset.
 - Isochronic pulse: later optional mode using a single carrier tone with amplitude pulsing, useful because it can work over speakers without stereo separation.
 - Volume: gain ramping with short fade-in/fade-out to prevent clicks.
@@ -60,6 +61,7 @@ Use a static Vite app deployed on Netlify.
 8. Smooth fade-in/fade-out options: off, 3s, 10s, 30s.
 9. Mode switch keeps the app honest and uncluttered:
    - Pure Tone: default, works through earbuds, speakers, or phone speaker.
+   - Noise: white, pink, brown, blue, and violet noise with sleep/focus guidance.
    - Binaural Beat: optional, requires earbuds/headphones for the intended effect.
    - Isochronic Pulse: marked as planned/later, speaker-friendly but more noticeable.
 10. Output mode guidance:
@@ -74,6 +76,7 @@ Use a static Vite app deployed on Netlify.
 
 - Installable PWA with manifest icons, theme color, service worker, and offline shell.
 - Pure tone mode with one sine oscillator, frequency, volume, and timer controls.
+- Noise mode with white, pink, brown, blue, and violet colors.
 - Binaural beat mode with carrier frequency, beat frequency, volume, timer, and headphone guidance.
 - Need-first discovery flow, labelled recommendation cards, preset grid, and custom frequency input.
 - Real-time frequency and beat adjustment while playing.
@@ -103,6 +106,7 @@ src/
   audio/
     toneEngine.ts        # AudioContext, shared routing, gain ramps
     pureTone.ts          # Single oscillator mode
+    noise.ts             # Generated colored noise mode
     binauralBeat.ts      # Dual oscillator stereo mode
     isochronicPulse.ts   # Planned pulsed-amplitude mode
   components/
@@ -145,10 +149,11 @@ Core audio lifecycle:
 type Preset = {
   id: string;
   label: string;
-  mode: "pure" | "binaural" | "isochronic";
+  mode: "pure" | "noise" | "binaural" | "isochronic";
   frequency: number;
   beatFrequency?: number;
   pulseRate?: number;
+  noiseColor?: "white" | "pink" | "brown" | "blue" | "violet";
   intent: "sleep" | "meditation" | "focus" | "test";
   note: string;
 };
@@ -167,10 +172,11 @@ type Recommendation = {
 
 type SessionSettings = {
   selectedNeed: UserNeed | null;
-  mode: "pure" | "binaural" | "isochronic";
+  mode: "pure" | "noise" | "binaural" | "isochronic";
   frequency: number;
   beatFrequency: number;
   pulseRate: number;
+  noiseColor: "white" | "pink" | "brown" | "blue" | "violet";
   volume: number;
   timerMinutes: number | null;
   fadeSeconds: 0 | 3 | 10 | 30;

@@ -278,6 +278,31 @@ h2 {
   justify-content: center;
 }
 
+.color-control {
+  grid-column: span 2;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.color-chip {
+  min-height: 42px;
+  border: 1px solid rgba(16, 32, 29, 0.13);
+  border-radius: 8px;
+  color: #26342f;
+  background: #f6f4ed;
+  font-weight: 800;
+}
+
+.color-chip.active {
+  color: #fff9ed;
+  border-color: #10201d;
+  background: #10201d;
+}
+
 .range-control span,
 .status-line,
 .guidance,
@@ -393,6 +418,14 @@ input[type="range"] {
   .preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .color-control {
+    grid-column: span 2;
+  }
+
+  .color-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -418,6 +451,14 @@ input[type="range"] {
   .control-grid,
   .output-grid {
     grid-template-columns: 1fr;
+  }
+
+  .color-control {
+    grid-column: span 1;
+  }
+
+  .color-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tone-readout {

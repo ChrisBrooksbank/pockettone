@@ -13,7 +13,7 @@ import {
   Volume2,
   Waves,
 } from "lucide-react";
-import { ToneEngine, type ToneMode } from "./audio/toneEngine";
+import { ToneEngine, type NoiseColor, type ToneMode } from "./audio/toneEngine";
 import { needs } from "./data/needs";
 import { presets } from "./data/presets";
 import { recommendations } from "./data/recommendations";
@@ -27,6 +27,7 @@ const defaultSettings: SessionSettings = {
   frequency: 174,
   beatFrequency: 4,
   pulseRate: 6,
+  noiseColor: "brown",
   volume: 0.18,
   timerMinutes: 30,
   fadeSeconds: 10,
@@ -36,6 +37,7 @@ const defaultSettings: SessionSettings = {
 
 const timers = [5, 10, 20, 30, 45, 60];
 const fades: SessionSettings["fadeSeconds"][] = [0, 3, 10, 30];
+const noiseColors: NoiseColor[] = ["brown", "pink", "white", "blue", "violet"];
 
 export default function App() {
   const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings);
@@ -48,12 +50,22 @@ export default function App() {
   const selectedPreset = useMemo(
     () =>
       presets.find(
-        (preset) =>
-          preset.mode === settings.mode &&
-          preset.frequency === settings.frequency &&
-          (preset.beatFrequency ?? settings.beatFrequency) === settings.beatFrequency,
+        (preset) => {
+          if (preset.mode !== settings.mode) {
+            return false;
+          }
+
+          if (settings.mode === "noise") {
+            return preset.noiseColor === settings.noiseColor;
+          }
+
+          return (
+            preset.frequency === settings.frequency &&
+            (preset.beatFrequency ?? settings.beatFrequency) === settings.beatFrequency
+          );
+        },
       ),
-    [settings.beatFrequency, settings.frequency, settings.mode],
+    [settings.beatFrequency, settings.frequency, settings.mode, settings.noiseColor],
   );
 
   const activeRecommendations = recommendations
@@ -139,6 +151,7 @@ export default function App() {
       frequency: preset.frequency,
       beatFrequency: preset.beatFrequency ?? settings.beatFrequency,
       pulseRate: preset.pulseRate ?? settings.pulseRate,
+      noiseColor: preset.noiseColor ?? settings.noiseColor,
       timerMinutes: timerMinutes ?? settings.timerMinutes,
       selectedNeed: preset.intent,
       outputMode: preset.mode === "binaural" ? "earbuds" : settings.outputMode,
@@ -184,7 +197,7 @@ export default function App() {
         <div className="tone-readout">
           <div>
             <p className="eyebrow">{modeLabel(settings.mode)}</p>
-            <h2>{selectedPreset?.label ?? `${formatNumber(settings.frequency)} Hz Custom`}</h2>
+            <h2>{selectedPreset?.label ?? customTitle(settings)}</h2>
             <p>{selectedPreset?.note ?? customToneCopy(settings.mode)}</p>
           </div>
           <button
@@ -199,6 +212,7 @@ export default function App() {
 
         <div className="mode-tabs" aria-label="Tone mode">
           <ModeButton current={settings.mode} mode="pure" onClick={() => patchSettings({ mode: "pure" })} />
+          <ModeButton current={settings.mode} mode="noise" onClick={() => patchSettings({ mode: "noise" })} />
           <ModeButton
             current={settings.mode}
             mode="binaural"
@@ -208,20 +222,38 @@ export default function App() {
         </div>
 
         <div className="control-grid">
-          <label className="control">
-            <span>Frequency</span>
-            <div className="number-field">
-              <input
-                min="20"
-                max="20000"
-                step="0.1"
-                type="number"
-                value={settings.frequency}
-                onChange={(event) => patchSettings({ frequency: Number(event.target.value) })}
-              />
-              <b>Hz</b>
+          {settings.mode === "noise" ? (
+            <div className="control color-control">
+              <span>Noise color</span>
+              <div className="color-grid" aria-label="Noise color">
+                {noiseColors.map((color) => (
+                  <button
+                    className={settings.noiseColor === color ? "color-chip active" : "color-chip"}
+                    key={color}
+                    onClick={() => patchSettings({ noiseColor: color })}
+                    type="button"
+                  >
+                    {noiseLabel(color)}
+                  </button>
+                ))}
+              </div>
             </div>
-          </label>
+          ) : (
+            <label className="control">
+              <span>Frequency</span>
+              <div className="number-field">
+                <input
+                  min="20"
+                  max="20000"
+                  step="0.1"
+                  type="number"
+                  value={settings.frequency}
+                  onChange={(event) => patchSettings({ frequency: Number(event.target.value) })}
+                />
+                <b>Hz</b>
+              </div>
+            </label>
+          )}
 
           {settings.mode === "binaural" && (
             <label className="control">
@@ -338,6 +370,13 @@ export default function App() {
             <Bluetooth size={17} /> Isochronic pulse is more noticeable than a pure tone and can work over speakers.
           </p>
         )}
+
+        {settings.mode === "noise" && (
+          <p className="guidance">
+            <Waves size={17} /> Brown and pink noise are usually gentler for sleep or focus. White, blue, and violet are
+            brighter, so keep them low.
+          </p>
+        )}
       </section>
 
       <section className="recommendation-section" aria-labelledby="recommendations-title">
@@ -416,10 +455,16 @@ function modeLabel(mode: ToneMode) {
   if (mode === "isochronic") {
     return "Isochronic pulse";
   }
+  if (mode === "noise") {
+    return "Noise";
+  }
   return "Pure tone";
 }
 
 function playbackLabel(settings: SessionSettings) {
+  if (settings.mode === "noise") {
+    return `Playing ${noiseLabel(settings.noiseColor).toLowerCase()} noise.`;
+  }
   if (settings.mode === "binaural") {
     return `Playing ${formatNumber(settings.frequency)} Hz with a ${formatNumber(settings.beatFrequency)} Hz binaural beat.`;
   }
@@ -430,6 +475,9 @@ function playbackLabel(settings: SessionSettings) {
 }
 
 function customToneCopy(mode: ToneMode) {
+  if (mode === "noise") {
+    return "Custom noise color. Brown and pink are gentler; white, blue, and violet are brighter.";
+  }
   if (mode === "binaural") {
     return "Custom headphone-only stereo beat. Keep it subtle.";
   }
@@ -437,6 +485,18 @@ function customToneCopy(mode: ToneMode) {
     return "Custom pulsed tone. Useful over speakers, but more noticeable.";
   }
   return "Custom pure sine wave. Low frequencies may be felt more than heard.";
+}
+
+function customTitle(settings: SessionSettings) {
+  if (settings.mode === "noise") {
+    return `${noiseLabel(settings.noiseColor)} noise`;
+  }
+
+  return `${formatNumber(settings.frequency)} Hz Custom`;
+}
+
+function noiseLabel(color: NoiseColor) {
+  return color.charAt(0).toUpperCase() + color.slice(1);
 }
 
 function formatNumber(value: number) {

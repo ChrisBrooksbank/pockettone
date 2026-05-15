@@ -1,4 +1,4 @@
-import type { ToneMode } from "../audio/toneEngine";
+import type { NoiseColor, ToneMode } from "../audio/toneEngine";
 
 export type UserNeed = "sleep" | "settle" | "meditation" | "focus" | "test";
 
@@ -11,6 +11,7 @@ export type Preset = {
   frequency: number;
   beatFrequency?: number;
   pulseRate?: number;
+  noiseColor?: NoiseColor;
   intent: UserNeed;
   note: string;
   caution?: string;
@@ -32,6 +33,7 @@ export type SessionSettings = {
   frequency: number;
   beatFrequency: number;
   pulseRate: number;
+  noiseColor: NoiseColor;
   volume: number;
   timerMinutes: number | null;
   fadeSeconds: 0 | 3 | 10 | 30;

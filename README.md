@@ -1,6 +1,6 @@
 # PocketTone
 
-PocketTone is an installable PWA for real-time pure sine tones, binaural beats, and guided tone discovery. It is designed for meditation, sleep wind-down, focus sessions, and simple audio checks.
+PocketTone is an installable PWA for real-time pure sine tones, colored noise, binaural beats, and guided tone discovery. It is designed for meditation, sleep wind-down, focus sessions, and simple audio checks.
 
 Live site: https://pockettone.netlify.app
 
@@ -8,7 +8,8 @@ Live site: https://pockettone.netlify.app
 
 - Need-first discovery for sleep, settling, meditation, focus, and audio testing.
 - Labelled presets plus custom frequency control.
-- Real-time Web Audio synthesis with pure tone, binaural beat, and isochronic pulse modes.
+- Real-time Web Audio synthesis with pure tone, noise, binaural beat, and isochronic pulse modes.
+- White, pink, brown, blue, and violet noise colors.
 - Timer, fade, volume, output guidance, and optional haptic feedback.
 - Offline-capable PWA with manifest and service worker.
 - Static Netlify deployment.
