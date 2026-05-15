@@ -26,8 +26,10 @@ Recent Reddit discussion also shows demand for a no-ads, no-subscription 432 Hz 
 Use a static Vite app deployed on Netlify.
 
 - Framework: React + TypeScript + Vite, or vanilla TypeScript if the UI remains small.
-- Audio: Web Audio API with `AudioContext`, `OscillatorNode`, `GainNode`, and `StereoPannerNode` where supported.
+- Audio: Web Audio API with `AudioContext`, `OscillatorNode`, `GainNode`, `ChannelMergerNode`, and `StereoPannerNode` where supported.
 - Core tone: single real-time `sine` oscillator by default. MDN documents `OscillatorNode.frequency` in hertz and built-in waveform types including `sine`.
+- Binaural beats: optional headphone-only mode using two sine oscillators, one routed left and one routed right, with a small beat-frequency offset.
+- Isochronic pulse: later optional mode using a single carrier tone with amplitude pulsing, useful because it can work over speakers without stereo separation.
 - Volume: gain ramping with short fade-in/fade-out to prevent clicks.
 - PWA: web app manifest, service worker, cached app shell, offline use after first load. MDN notes installable PWAs use a manifest and commonly use service workers for offline capability.
 - Haptics: browser Vibration API via `navigator.vibrate()` for play/stop, preset selection, and timer completion. MDN notes unsupported devices simply do nothing, so haptics should be progressive enhancement.
@@ -49,23 +51,28 @@ Use a static Vite app deployed on Netlify.
 4. Large play/stop control with tactile haptic response.
 5. Sleep-friendly timer: 5, 10, 20, 30, 45, 60 minutes, plus custom.
 6. Smooth fade-in/fade-out options: off, 3s, 10s, 30s.
-7. Output mode guidance:
+7. Mode switch keeps the app honest and uncluttered:
+   - Pure Tone: default, works through earbuds, speakers, or phone speaker.
+   - Binaural Beat: optional, requires earbuds/headphones for the intended effect.
+   - Isochronic Pulse: marked as planned/later, speaker-friendly but more noticeable.
+8. Output mode guidance:
    - Earbuds: best isolation, use lower volume.
    - External speaker: ambient room tone.
    - Phone speaker: convenient, limited bass response.
-8. Offline-first and private: no login, no analytics by default, no network after install except app updates.
-9. Accessibility: full keyboard support, large touch targets, reduced-motion support, clear contrast, ARIA status for playback.
-10. Responsible claims: relaxation/ritual language, not medical treatment language.
+9. Offline-first and private: no login, no analytics by default, no network after install except app updates.
+10. Accessibility: full keyboard support, large touch targets, reduced-motion support, clear contrast, ARIA status for playback.
+11. Responsible claims: relaxation/ritual language, not medical treatment language.
 
 ## MVP scope
 
 - Installable PWA with manifest icons, theme color, service worker, and offline shell.
-- One sine oscillator with frequency, volume, and timer controls.
+- Pure tone mode with one sine oscillator, frequency, volume, and timer controls.
+- Binaural beat mode with carrier frequency, beat frequency, volume, timer, and headphone guidance.
 - Labelled preset grid plus custom frequency input.
-- Real-time frequency adjustment while playing.
+- Real-time frequency and beat adjustment while playing.
 - Fade-in/fade-out to avoid pops.
 - Haptic feedback where available.
-- Local persistence of last frequency, volume, fade, timer, and preferred output mode.
+- Local persistence of last mode, frequency, beat frequency, volume, fade, timer, and preferred output mode.
 - Basic safety/about panel.
 - Netlify configuration.
 
@@ -74,7 +81,7 @@ Use a static Vite app deployed on Netlify.
 - Gentle visualizer using the same oscillator state, with reduced-motion fallback.
 - Favorite presets and named custom tones.
 - Optional ambient layer such as brown noise or rain, clearly separate from pure-tone mode.
-- Binaural mode with headphone-only warning.
+- Isochronic pulse mode with carrier frequency, pulse rate, depth, and softened pulse shapes.
 - Tone sweep and interval sessions.
 - Shareable preset URLs, e.g. `/tone/432`.
 - Wake Lock API option for active sessions, with clear battery warning.
@@ -87,11 +94,16 @@ Suggested structure:
 ```text
 src/
   audio/
-    toneEngine.ts        # AudioContext, oscillator lifecycle, gain ramps
+    toneEngine.ts        # AudioContext, shared routing, gain ramps
+    pureTone.ts          # Single oscillator mode
+    binauralBeat.ts      # Dual oscillator stereo mode
+    isochronicPulse.ts   # Planned pulsed-amplitude mode
   components/
     Player.tsx
+    ModeTabs.tsx
     PresetGrid.tsx
     FrequencyInput.tsx
+    BeatInput.tsx
     TimerControl.tsx
     OutputMode.tsx
     SafetyPanel.tsx
@@ -107,11 +119,14 @@ src/
 Core audio lifecycle:
 
 1. Create/resume `AudioContext` only after a user gesture.
-2. On play, create `OscillatorNode`, set `type = "sine"`, set frequency, connect to `GainNode`, then destination.
-3. Start with gain at `0`, ramp to selected volume over fade duration.
-4. On frequency changes, use `setTargetAtTime` or short linear ramp to avoid abrupt artifacts.
-5. On stop/timer, ramp gain to `0`, then stop/disconnect the oscillator.
-6. Suspend or close the audio context when idle.
+2. On play in Pure Tone mode, create `OscillatorNode`, set `type = "sine"`, set frequency, connect to `GainNode`, then destination.
+3. On play in Binaural Beat mode, create two `OscillatorNode`s and route them as separate left/right channels. If carrier is `432 Hz` and beat frequency is `6 Hz`, use `429 Hz` left and `435 Hz` right, or use a clearly documented alternative such as carrier-left plus offset-right.
+4. For Binaural Beat mode, show headphone guidance before playback and keep phone/external speaker output available only as ordinary stereo audio, not as the intended binaural effect.
+5. For future Isochronic Pulse mode, use a single carrier oscillator and modulate gain at the selected pulse rate with smoothed gain curves to avoid harsh clicks.
+6. Start with gain at `0`, ramp to selected volume over fade duration.
+7. On frequency changes, use `setTargetAtTime` or short linear ramp to avoid abrupt artifacts.
+8. On stop/timer, ramp gain to `0`, then stop/disconnect the oscillator.
+9. Suspend or close the audio context when idle.
 
 ## Data model
 
@@ -119,13 +134,19 @@ Core audio lifecycle:
 type Preset = {
   id: string;
   label: string;
+  mode: "pure" | "binaural" | "isochronic";
   frequency: number;
+  beatFrequency?: number;
+  pulseRate?: number;
   intent: "sleep" | "meditation" | "focus" | "test";
   note: string;
 };
 
 type SessionSettings = {
+  mode: "pure" | "binaural" | "isochronic";
   frequency: number;
+  beatFrequency: number;
+  pulseRate: number;
   volume: number;
   timerMinutes: number | null;
   fadeSeconds: 0 | 3 | 10 | 30;
@@ -157,8 +178,8 @@ type SessionSettings = {
 
 ## Testing checklist
 
-- Unit-test frequency validation, timer behavior, preset data, and persistence.
-- Browser-test play/stop and frequency changes with a mocked or integration-tested Web Audio layer.
+- Unit-test frequency validation, beat-frequency validation, timer behavior, preset data, and persistence.
+- Browser-test play/stop, frequency changes, and binaural channel routing with a mocked or integration-tested Web Audio layer.
 - PWA checks with Lighthouse: installable, offline, manifest, service worker.
 - Mobile checks on iOS Safari and Android Chrome:
   - audio starts only after gesture,
@@ -169,20 +190,22 @@ type SessionSettings = {
   - no pop/click on start/stop,
   - volume defaults low,
   - timer fade-out works,
-  - changing frequency while playing is smooth.
+  - changing frequency while playing is smooth,
+  - binaural mode produces distinct left/right frequencies and warns clearly that headphones are required.
 
 ## Milestones
 
 1. Project setup: Vite, TypeScript, linting, Netlify config, PWA baseline.
-2. Audio engine: sine oscillator, gain ramps, live frequency changes, safe teardown.
-3. Core UI: player, presets, custom frequency, volume, timer, output mode.
+2. Audio engine: pure tone and binaural oscillators, gain ramps, live frequency changes, safe teardown.
+3. Core UI: player, mode tabs, presets, custom frequency, beat frequency, volume, timer, output mode.
 4. Mobile polish: haptics, touch ergonomics, install flow, offline behavior.
 5. QA and deploy: Lighthouse, device testing, Netlify preview, production deploy.
 
 ## Open product decisions
 
 - Should PocketTone be explicitly free/open source in the UI, or just quietly free?
-- Should the first release include any ambient layer, or stay pure-tone only?
+- Should the first release include any ambient layer, or stay focused on pure tone plus binaural beats?
+- Should isochronic pulse ship in the MVP behind a simple mode tab, or wait until after device testing?
 - Should preset notes mention the popular wellness associations, or keep the copy strictly practical and non-claimy?
 - Should the repository be public immediately, or remain private until an MVP exists?
 
