@@ -76,8 +76,7 @@ export class ToneEngine {
         this.replaceNoiseSource(noiseColor);
       }
     } else if (mode === "binaural" && oscillators.length === 2) {
-      const left = clampFrequency(frequency - beatFrequency / 2);
-      const right = clampFrequency(frequency + beatFrequency / 2);
+      const [left, right] = binauralPair(frequency, beatFrequency);
       smoothParam(oscillators[0].frequency, left, now);
       smoothParam(oscillators[1].frequency, right, now);
     } else {
@@ -159,8 +158,9 @@ export class ToneEngine {
   }
 
   private createBinauralNodes(context: AudioContext, gain: GainNode): RunningNodes {
-    const left = createSine(context, this.settings.frequency - this.settings.beatFrequency / 2);
-    const right = createSine(context, this.settings.frequency + this.settings.beatFrequency / 2);
+    const [leftFrequency, rightFrequency] = binauralPair(this.settings.frequency, this.settings.beatFrequency);
+    const left = createSine(context, leftFrequency);
+    const right = createSine(context, rightFrequency);
     const merger = context.createChannelMerger(2);
     left.connect(merger, 0, 0);
     right.connect(merger, 0, 1);
@@ -213,6 +213,14 @@ export class ToneEngine {
     this.running.sources = [source];
     this.running.noiseColor = noiseColor;
   }
+}
+
+// Keep both ears inside the audible range by nudging the carrier, rather than clamping one side,
+// which would silently shrink the beat (e.g. 20 Hz with a 4 Hz beat used to give only 2 Hz).
+function binauralPair(frequency: number, beatFrequency: number): [number, number] {
+  const half = beatFrequency / 2;
+  const carrier = Math.min(MAX_FREQUENCY - half, Math.max(MIN_FREQUENCY + half, frequency));
+  return [carrier - half, carrier + half];
 }
 
 function createSine(context: AudioContext, frequency: number) {

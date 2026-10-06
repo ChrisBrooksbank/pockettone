@@ -189,7 +189,15 @@ export default function App() {
       return;
     }
 
-    await engineRef.current.play(settings);
+    try {
+      await engineRef.current.play(settings);
+    } catch {
+      // AudioContext creation or resume can be refused (unsupported browser, autoplay policy).
+      setStatus("Audio could not start. Check that sound is allowed for this site, then try again.");
+      haptic(20);
+      return;
+    }
+
     setIsPlaying(true);
     setStatus(playbackLabel(settings));
     haptic([12, 35, 12]);
