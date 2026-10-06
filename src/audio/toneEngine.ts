@@ -245,10 +245,28 @@ function rampGain(param: AudioParam, context: AudioContext, value: number, fadeS
   param.setTargetAtTime(value, now, Math.max(0.01, fadeSeconds / 3));
 }
 
+const NOISE_LOOP_SECONDS = 6;
+const NOISE_SEAM_SECONDS = 0.25;
+
 function createNoiseSource(context: AudioContext, color: NoiseColor) {
-  const buffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
-  const data = buffer.getChannelData(0);
-  fillNoiseBuffer(data, color);
+  const length = Math.floor(context.sampleRate * NOISE_LOOP_SECONDS);
+  const seam = Math.floor(context.sampleRate * NOISE_SEAM_SECONDS);
+  const raw = new Float32Array(length + seam);
+  fillNoiseBuffer(raw, color);
+
+  // Brown and pink noise wander, so the last sample of a plain loop rarely matches the first and
+  // every repeat clicks. Generate a little extra and crossfade that tail over the head: the sample
+  // after the loop point then continues smoothly from where the buffer ended.
+  for (let index = 0; index < seam; index += 1) {
+    const t = index / seam;
+    raw[index] = raw[index] * Math.sin((t * Math.PI) / 2) + raw[length + index] * Math.cos((t * Math.PI) / 2);
+  }
+
+  const data = raw.subarray(0, length);
+  normalizePeak(data);
+
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  buffer.getChannelData(0).set(data);
 
   const source = context.createBufferSource();
   source.buffer = buffer;
@@ -267,7 +285,6 @@ function fillNoiseBuffer(data: Float32Array, color: NoiseColor) {
   let b4 = 0;
   let b5 = 0;
   let b6 = 0;
-  let max = 0;
 
   for (let index = 0; index < data.length; index += 1) {
     const white = Math.random() * 2 - 1;
@@ -296,7 +313,13 @@ function fillNoiseBuffer(data: Float32Array, color: NoiseColor) {
     }
 
     data[index] = sample;
-    max = Math.max(max, Math.abs(sample));
+  }
+}
+
+function normalizePeak(data: Float32Array) {
+  let max = 0;
+  for (let index = 0; index < data.length; index += 1) {
+    max = Math.max(max, Math.abs(data[index]));
   }
 
   const scale = max > 0 ? 0.85 / max : 1;

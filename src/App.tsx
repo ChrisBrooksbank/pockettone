@@ -87,8 +87,10 @@ export default function App() {
   const haptic = useHaptics(settings.hapticsEnabled);
 
   const selectedPreset = useMemo(
-    () =>
-      presets.find(
+    () => {
+      // Several needs share the same sound (e.g. brown noise for sleep, settle and focus), so prefer
+      // the preset filed under the current need when more than one matches.
+      const matches = presets.filter(
         (preset) => {
           if (preset.mode !== settings.mode) {
             return false;
@@ -103,8 +105,10 @@ export default function App() {
             (preset.beatFrequency ?? settings.beatFrequency) === settings.beatFrequency
           );
         },
-      ),
-    [settings.beatFrequency, settings.frequency, settings.mode, settings.noiseColor],
+      );
+      return matches.find((preset) => preset.intent === settings.selectedNeed) ?? matches[0];
+    },
+    [settings.beatFrequency, settings.frequency, settings.mode, settings.noiseColor, settings.selectedNeed],
   );
 
   const activeRecommendations = recommendations
@@ -336,13 +340,13 @@ export default function App() {
             <label className="control">
               <span>Frequency</span>
               <div className="number-field">
-                <input
-                  min="20"
-                  max="20000"
-                  step="0.1"
-                  type="number"
+                <NumberInput
+                  min={20}
+                  max={20000}
+                  step={0.1}
                   value={settings.frequency}
-                  onChange={(event) => patchSettings({ frequency: Number(event.target.value) })}
+                  clamp={clampFrequency}
+                  onCommit={(frequency) => patchSettings({ frequency })}
                 />
                 <b>Hz</b>
               </div>
@@ -353,13 +357,13 @@ export default function App() {
             <label className="control">
               <span>Beat</span>
               <div className="number-field">
-                <input
-                  min="0.5"
-                  max="40"
-                  step="0.5"
-                  type="number"
+                <NumberInput
+                  min={0.5}
+                  max={40}
+                  step={0.5}
                   value={settings.beatFrequency}
-                  onChange={(event) => patchSettings({ beatFrequency: Number(event.target.value) })}
+                  clamp={clampBeatFrequency}
+                  onCommit={(beatFrequency) => patchSettings({ beatFrequency })}
                 />
                 <b>Hz</b>
               </div>
@@ -370,13 +374,13 @@ export default function App() {
             <label className="control">
               <span>Pulse rate</span>
               <div className="number-field">
-                <input
-                  min="0.5"
-                  max="40"
-                  step="0.5"
-                  type="number"
+                <NumberInput
+                  min={0.5}
+                  max={40}
+                  step={0.5}
                   value={settings.pulseRate}
-                  onChange={(event) => patchSettings({ pulseRate: Number(event.target.value) })}
+                  clamp={clampBeatFrequency}
+                  onCommit={(pulseRate) => patchSettings({ pulseRate })}
                 />
                 <b>Hz</b>
               </div>
@@ -535,6 +539,57 @@ export default function App() {
         </label>
       </section>
     </main>
+  );
+}
+
+// Keeps the typed text locally so the field can be cleared or hold a half-typed value, and only
+// commits numbers that are in range; anything else snaps back to the last valid value on blur.
+function NumberInput({
+  value,
+  min,
+  max,
+  step,
+  clamp,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  clamp: (value: number) => number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft((current) => (Number(current) === value && current.trim() !== "" ? current : String(value)));
+  }, [value]);
+
+  return (
+    <input
+      inputMode="decimal"
+      min={min}
+      max={max}
+      step={step}
+      type="number"
+      value={draft}
+      onChange={(event) => {
+        const text = event.target.value;
+        const parsed = Number(text);
+        setDraft(text);
+        if (text.trim() !== "" && Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+          onCommit(parsed);
+        }
+      }}
+      onBlur={() => {
+        const parsed = Number(draft);
+        const next = draft.trim() !== "" && Number.isFinite(parsed) ? clamp(parsed) : value;
+        setDraft(String(next));
+        if (next !== value) {
+          onCommit(next);
+        }
+      }}
+    />
   );
 }
 
