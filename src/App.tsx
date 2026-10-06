@@ -14,7 +14,7 @@ import {
   Volume2,
   Waves,
 } from "lucide-react";
-import { ToneEngine, type NoiseColor, type ToneMode } from "./audio/toneEngine";
+import { ToneEngine, clampBeatFrequency, clampFrequency, type NoiseColor, type ToneMode } from "./audio/toneEngine";
 import { needs } from "./data/needs";
 import { presets } from "./data/presets";
 import { recommendations } from "./data/recommendations";
@@ -40,13 +40,44 @@ const timers = [5, 10, 20, 30, 45, 60];
 const fades: SessionSettings["fadeSeconds"][] = [0, 3, 10, 30];
 const noiseColors: NoiseColor[] = ["brown", "pink", "white", "blue", "violet"];
 
+const toneModes: ToneMode[] = ["pure", "noise", "binaural", "isochronic"];
+const outputModes: OutputMode[] = ["earbuds", "speaker", "phone"];
+
+// Saved settings may come from an older build (e.g. before noise mode existed) or be hand-edited,
+// so keep only fields that are still valid and fill the rest from the defaults.
+function restoreSettings(stored: unknown): SessionSettings {
+  if (!stored || typeof stored !== "object") {
+    return defaultSettings;
+  }
+
+  const saved = stored as Partial<Record<keyof SessionSettings, unknown>>;
+  const finite = (value: unknown, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const oneOf = <T,>(value: unknown, options: readonly T[], fallback: T) =>
+    options.includes(value as T) ? (value as T) : fallback;
+
+  return {
+    selectedNeed: oneOf(saved.selectedNeed, needs.map((need) => need.id), defaultSettings.selectedNeed),
+    mode: oneOf(saved.mode, toneModes, defaultSettings.mode),
+    frequency: clampFrequency(finite(saved.frequency, defaultSettings.frequency)),
+    beatFrequency: clampBeatFrequency(finite(saved.beatFrequency, defaultSettings.beatFrequency)),
+    pulseRate: clampBeatFrequency(finite(saved.pulseRate, defaultSettings.pulseRate)),
+    noiseColor: oneOf(saved.noiseColor, noiseColors, defaultSettings.noiseColor),
+    volume: Math.min(1, Math.max(0, finite(saved.volume, defaultSettings.volume))),
+    timerMinutes: saved.timerMinutes === null ? null : oneOf(saved.timerMinutes, timers, defaultSettings.timerMinutes),
+    fadeSeconds: oneOf(saved.fadeSeconds, fades, defaultSettings.fadeSeconds),
+    outputMode: oneOf(saved.outputMode, outputModes, defaultSettings.outputMode),
+    hapticsEnabled: typeof saved.hapticsEnabled === "boolean" ? saved.hapticsEnabled : defaultSettings.hapticsEnabled,
+  };
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
 export default function App() {
-  const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings);
+  const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings, restoreSettings);
   const [isPlaying, setIsPlaying] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [status, setStatus] = useState("Choose what you need, then press play.");
@@ -56,8 +87,10 @@ export default function App() {
   const haptic = useHaptics(settings.hapticsEnabled);
 
   const selectedPreset = useMemo(
-    () =>
-      presets.find(
+    () => {
+      // Several needs share the same sound (e.g. brown noise for sleep, settle and focus), so prefer
+      // the preset filed under the current need when more than one matches.
+      const matches = presets.filter(
         (preset) => {
           if (preset.mode !== settings.mode) {
             return false;
@@ -72,8 +105,10 @@ export default function App() {
             (preset.beatFrequency ?? settings.beatFrequency) === settings.beatFrequency
           );
         },
-      ),
-    [settings.beatFrequency, settings.frequency, settings.mode, settings.noiseColor],
+      );
+      return matches.find((preset) => preset.intent === settings.selectedNeed) ?? matches[0];
+    },
+    [settings.beatFrequency, settings.frequency, settings.mode, settings.noiseColor, settings.selectedNeed],
   );
 
   const activeRecommendations = recommendations
@@ -127,22 +162,19 @@ export default function App() {
       return;
     }
 
-    setRemainingSeconds(settings.timerMinutes * 60);
-    const interval = window.setInterval(() => {
-      setRemainingSeconds((current) => {
-        if (current === null) {
-          return null;
-        }
-
-        if (current <= 1) {
-          window.clearInterval(interval);
-          stopTone("Timer complete.");
-          return 0;
-        }
-
-        return current - 1;
-      });
-    }, 1000);
+    // Count down against a wall-clock deadline: interval ticks are throttled when the screen is
+    // off or the tab is in the background, so counting ticks would let sessions run long.
+    const endsAt = Date.now() + settings.timerMinutes * 60 * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      setRemainingSeconds(left);
+      if (left === 0) {
+        window.clearInterval(interval);
+        void stopTone("Timer complete.");
+      }
+    };
+    const interval = window.setInterval(tick, 1000);
+    tick();
 
     return () => window.clearInterval(interval);
   }, [isPlaying, settings.timerMinutes]);
@@ -157,7 +189,15 @@ export default function App() {
       return;
     }
 
-    await engineRef.current.play(settings);
+    try {
+      await engineRef.current.play(settings);
+    } catch {
+      // AudioContext creation or resume can be refused (unsupported browser, autoplay policy).
+      setStatus("Audio could not start. Check that sound is allowed for this site, then try again.");
+      haptic(20);
+      return;
+    }
+
     setIsPlaying(true);
     setStatus(playbackLabel(settings));
     haptic([12, 35, 12]);
@@ -308,13 +348,13 @@ export default function App() {
             <label className="control">
               <span>Frequency</span>
               <div className="number-field">
-                <input
-                  min="20"
-                  max="20000"
-                  step="0.1"
-                  type="number"
+                <NumberInput
+                  min={20}
+                  max={20000}
+                  step={0.1}
                   value={settings.frequency}
-                  onChange={(event) => patchSettings({ frequency: Number(event.target.value) })}
+                  clamp={clampFrequency}
+                  onCommit={(frequency) => patchSettings({ frequency })}
                 />
                 <b>Hz</b>
               </div>
@@ -325,13 +365,13 @@ export default function App() {
             <label className="control">
               <span>Beat</span>
               <div className="number-field">
-                <input
-                  min="0.5"
-                  max="40"
-                  step="0.5"
-                  type="number"
+                <NumberInput
+                  min={0.5}
+                  max={40}
+                  step={0.5}
                   value={settings.beatFrequency}
-                  onChange={(event) => patchSettings({ beatFrequency: Number(event.target.value) })}
+                  clamp={clampBeatFrequency}
+                  onCommit={(beatFrequency) => patchSettings({ beatFrequency })}
                 />
                 <b>Hz</b>
               </div>
@@ -342,13 +382,13 @@ export default function App() {
             <label className="control">
               <span>Pulse rate</span>
               <div className="number-field">
-                <input
-                  min="0.5"
-                  max="40"
-                  step="0.5"
-                  type="number"
+                <NumberInput
+                  min={0.5}
+                  max={40}
+                  step={0.5}
                   value={settings.pulseRate}
-                  onChange={(event) => patchSettings({ pulseRate: Number(event.target.value) })}
+                  clamp={clampBeatFrequency}
+                  onCommit={(pulseRate) => patchSettings({ pulseRate })}
                 />
                 <b>Hz</b>
               </div>
@@ -404,7 +444,7 @@ export default function App() {
         </div>
 
         <div className="output-grid" aria-label="Output mode">
-          {(["earbuds", "speaker", "phone"] as OutputMode[]).map((mode) => (
+          {outputModes.map((mode) => (
             <button
               className={settings.outputMode === mode ? "output active" : "output"}
               key={mode}
@@ -507,6 +547,57 @@ export default function App() {
         </label>
       </section>
     </main>
+  );
+}
+
+// Keeps the typed text locally so the field can be cleared or hold a half-typed value, and only
+// commits numbers that are in range; anything else snaps back to the last valid value on blur.
+function NumberInput({
+  value,
+  min,
+  max,
+  step,
+  clamp,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  clamp: (value: number) => number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft((current) => (Number(current) === value && current.trim() !== "" ? current : String(value)));
+  }, [value]);
+
+  return (
+    <input
+      inputMode="decimal"
+      min={min}
+      max={max}
+      step={step}
+      type="number"
+      value={draft}
+      onChange={(event) => {
+        const text = event.target.value;
+        const parsed = Number(text);
+        setDraft(text);
+        if (text.trim() !== "" && Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+          onCommit(parsed);
+        }
+      }}
+      onBlur={() => {
+        const parsed = Number(draft);
+        const next = draft.trim() !== "" && Number.isFinite(parsed) ? clamp(parsed) : value;
+        setDraft(String(next));
+        if (next !== value) {
+          onCommit(next);
+        }
+      }}
+    />
   );
 }
 
