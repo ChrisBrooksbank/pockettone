@@ -13,6 +13,7 @@ export type EngineSettings = {
 };
 
 type RunningNodes = {
+  mode: ToneMode;
   sources: AudioScheduledSourceNode[];
   oscillators: OscillatorNode[];
   gain: GainNode;
@@ -51,29 +52,18 @@ export class ToneEngine {
     this.settings = normalizeSettings(settings);
     const context = this.getContext();
     await context.resume();
-    await this.stop(0.02);
-
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0, context.currentTime);
-    gain.connect(context.destination);
-
-    if (this.settings.mode === "noise") {
-      this.running = this.createNoiseNodes(context, gain);
-    } else if (this.settings.mode === "binaural") {
-      this.running = this.createBinauralNodes(context, gain);
-    } else if (this.settings.mode === "isochronic") {
-      this.running = this.createIsochronicNodes(context, gain);
-    } else {
-      this.running = this.createPureNodes(context, gain);
-    }
-
-    this.running.sources.forEach((source) => source.start());
-    rampGain(gain.gain, context, this.settings.volume, this.settings.fadeSeconds);
+    this.start(context);
   }
 
   update(settings: EngineSettings) {
     this.settings = normalizeSettings(settings);
     if (!this.context || !this.running) {
+      return;
+    }
+
+    if (this.running.mode !== this.settings.mode) {
+      // Each mode uses a different node graph, so switching modes mid-session rebuilds it.
+      this.start(this.context, 0.05);
       return;
     }
 
@@ -102,13 +92,37 @@ export class ToneEngine {
   }
 
   async stop(fadeOverride?: number) {
+    this.release(fadeOverride ?? this.settings.fadeSeconds);
+  }
+
+  private start(context: AudioContext, fadeInOverride?: number) {
+    this.release(0.02);
+
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0, context.currentTime);
+    gain.connect(context.destination);
+
+    if (this.settings.mode === "noise") {
+      this.running = this.createNoiseNodes(context, gain);
+    } else if (this.settings.mode === "binaural") {
+      this.running = this.createBinauralNodes(context, gain);
+    } else if (this.settings.mode === "isochronic") {
+      this.running = this.createIsochronicNodes(context, gain);
+    } else {
+      this.running = this.createPureNodes(context, gain);
+    }
+
+    this.running.sources.forEach((source) => source.start());
+    rampGain(gain.gain, context, this.settings.volume, fadeInOverride ?? this.settings.fadeSeconds);
+  }
+
+  private release(fadeSeconds: number) {
     if (!this.context || !this.running) {
       return;
     }
 
     const nodes = this.running;
     this.running = null;
-    const fadeSeconds = fadeOverride ?? this.settings.fadeSeconds;
     const stopAt = this.context.currentTime + Math.max(0.02, fadeSeconds);
     nodes.gain.gain.cancelScheduledValues(this.context.currentTime);
     nodes.gain.gain.setTargetAtTime(0, this.context.currentTime, Math.max(0.01, fadeSeconds / 3));
@@ -123,8 +137,6 @@ export class ToneEngine {
         }
       });
       try {
-        nodes.pulse?.stop();
-        nodes.pulse?.disconnect();
         nodes.pulseGain?.disconnect();
         nodes.gain.disconnect();
       } catch {
@@ -143,7 +155,7 @@ export class ToneEngine {
   private createPureNodes(context: AudioContext, gain: GainNode): RunningNodes {
     const oscillator = createSine(context, this.settings.frequency);
     oscillator.connect(gain);
-    return { sources: [oscillator], oscillators: [oscillator], gain };
+    return { mode: "pure", sources: [oscillator], oscillators: [oscillator], gain };
   }
 
   private createBinauralNodes(context: AudioContext, gain: GainNode): RunningNodes {
@@ -153,12 +165,15 @@ export class ToneEngine {
     left.connect(merger, 0, 0);
     right.connect(merger, 0, 1);
     merger.connect(gain);
-    return { sources: [left, right], oscillators: [left, right], gain };
+    return { mode: "binaural", sources: [left, right], oscillators: [left, right], gain };
   }
 
   private createIsochronicNodes(context: AudioContext, gain: GainNode): RunningNodes {
     const oscillator = createSine(context, this.settings.frequency);
-    const pulse = createSine(context, this.settings.pulseRate);
+    // The pulse is a sub-audio LFO, so it must bypass the audible-range clamp in createSine.
+    const pulse = context.createOscillator();
+    pulse.type = "sine";
+    pulse.frequency.value = this.settings.pulseRate;
     const pulseGain = context.createGain();
     const modulatedGain = context.createGain();
 
@@ -169,13 +184,13 @@ export class ToneEngine {
     oscillator.connect(modulatedGain);
     modulatedGain.connect(gain);
 
-    return { sources: [oscillator, pulse], oscillators: [oscillator], gain, pulse, pulseGain };
+    return { mode: "isochronic", sources: [oscillator, pulse], oscillators: [oscillator], gain, pulse, pulseGain };
   }
 
   private createNoiseNodes(context: AudioContext, gain: GainNode): RunningNodes {
     const source = createNoiseSource(context, this.settings.noiseColor);
     source.connect(gain);
-    return { sources: [source], oscillators: [], gain, noiseColor: this.settings.noiseColor };
+    return { mode: "noise", sources: [source], oscillators: [], gain, noiseColor: this.settings.noiseColor };
   }
 
   private replaceNoiseSource(noiseColor: NoiseColor) {

@@ -14,7 +14,7 @@ import {
   Volume2,
   Waves,
 } from "lucide-react";
-import { ToneEngine, type NoiseColor, type ToneMode } from "./audio/toneEngine";
+import { ToneEngine, clampBeatFrequency, clampFrequency, type NoiseColor, type ToneMode } from "./audio/toneEngine";
 import { needs } from "./data/needs";
 import { presets } from "./data/presets";
 import { recommendations } from "./data/recommendations";
@@ -40,13 +40,44 @@ const timers = [5, 10, 20, 30, 45, 60];
 const fades: SessionSettings["fadeSeconds"][] = [0, 3, 10, 30];
 const noiseColors: NoiseColor[] = ["brown", "pink", "white", "blue", "violet"];
 
+const toneModes: ToneMode[] = ["pure", "noise", "binaural", "isochronic"];
+const outputModes: OutputMode[] = ["earbuds", "speaker", "phone"];
+
+// Saved settings may come from an older build (e.g. before noise mode existed) or be hand-edited,
+// so keep only fields that are still valid and fill the rest from the defaults.
+function restoreSettings(stored: unknown): SessionSettings {
+  if (!stored || typeof stored !== "object") {
+    return defaultSettings;
+  }
+
+  const saved = stored as Partial<Record<keyof SessionSettings, unknown>>;
+  const finite = (value: unknown, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const oneOf = <T,>(value: unknown, options: readonly T[], fallback: T) =>
+    options.includes(value as T) ? (value as T) : fallback;
+
+  return {
+    selectedNeed: oneOf(saved.selectedNeed, needs.map((need) => need.id), defaultSettings.selectedNeed),
+    mode: oneOf(saved.mode, toneModes, defaultSettings.mode),
+    frequency: clampFrequency(finite(saved.frequency, defaultSettings.frequency)),
+    beatFrequency: clampBeatFrequency(finite(saved.beatFrequency, defaultSettings.beatFrequency)),
+    pulseRate: clampBeatFrequency(finite(saved.pulseRate, defaultSettings.pulseRate)),
+    noiseColor: oneOf(saved.noiseColor, noiseColors, defaultSettings.noiseColor),
+    volume: Math.min(1, Math.max(0, finite(saved.volume, defaultSettings.volume))),
+    timerMinutes: saved.timerMinutes === null ? null : oneOf(saved.timerMinutes, timers, defaultSettings.timerMinutes),
+    fadeSeconds: oneOf(saved.fadeSeconds, fades, defaultSettings.fadeSeconds),
+    outputMode: oneOf(saved.outputMode, outputModes, defaultSettings.outputMode),
+    hapticsEnabled: typeof saved.hapticsEnabled === "boolean" ? saved.hapticsEnabled : defaultSettings.hapticsEnabled,
+  };
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
 export default function App() {
-  const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings);
+  const [settings, setSettings] = usePersistentState("pockettone-settings", defaultSettings, restoreSettings);
   const [isPlaying, setIsPlaying] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [status, setStatus] = useState("Choose what you need, then press play.");
@@ -127,22 +158,19 @@ export default function App() {
       return;
     }
 
-    setRemainingSeconds(settings.timerMinutes * 60);
-    const interval = window.setInterval(() => {
-      setRemainingSeconds((current) => {
-        if (current === null) {
-          return null;
-        }
-
-        if (current <= 1) {
-          window.clearInterval(interval);
-          stopTone("Timer complete.");
-          return 0;
-        }
-
-        return current - 1;
-      });
-    }, 1000);
+    // Count down against a wall-clock deadline: interval ticks are throttled when the screen is
+    // off or the tab is in the background, so counting ticks would let sessions run long.
+    const endsAt = Date.now() + settings.timerMinutes * 60 * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      setRemainingSeconds(left);
+      if (left === 0) {
+        window.clearInterval(interval);
+        void stopTone("Timer complete.");
+      }
+    };
+    const interval = window.setInterval(tick, 1000);
+    tick();
 
     return () => window.clearInterval(interval);
   }, [isPlaying, settings.timerMinutes]);
@@ -404,7 +432,7 @@ export default function App() {
         </div>
 
         <div className="output-grid" aria-label="Output mode">
-          {(["earbuds", "speaker", "phone"] as OutputMode[]).map((mode) => (
+          {outputModes.map((mode) => (
             <button
               className={settings.outputMode === mode ? "output active" : "output"}
               key={mode}
