@@ -1,3 +1,7 @@
+<!-- hub-link -->
+> Part of [Chris's app hub](https://chrisbrooksbank-hub.netlify.app) - a directory of all my deployed apps.
+<!-- /hub-link -->
+
 <div align="center">
 
 <img src="docs/media/hero.gif" alt="PocketTone: animated waveforms cycling through a pure tone, a binaural beat, an isochronic pulse and brown noise" width="820" />
